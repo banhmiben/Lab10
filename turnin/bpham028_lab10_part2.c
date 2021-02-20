@@ -19,33 +19,8 @@
 
 unsigned char key = 0x00;
 unsigned char tmp = 0x00;
-unsigned char cnt = 0x00;
-
-void set_PWM(double frequency) {
-	static double current_frequency;
-
-	if (frequency != current_frequency) {
-		if (!frequency) { TCCR3B &= 0x08; }
-		else { TCCR3B |= 0x03; }
-		if (frequency < 0.954) { OCR3A = 0xFFFF; }
-		else if (frequency > 31250) { OCR3A = 0x0000; }
-		else {OCR3A = (short)(8000000 / (128 * frequency)) - 1; }
-		TCNT3 = 0;
-		current_frequency = frequency;
-	}
-
-}
-
-void PWM_on() {
-	TCCR3A = (1 << COM3A0);
-	TCCR3B = (1 << WGM32) | (1 << CS31) | (1 << CS30);
-	set_PWM(0);
-}
-
-void PWM_off() {
-	TCCR3A = 0x00;
-	TCCR3B = 0x00;
-}
+//unsigned char led = 0x00;
+//unsigned char cnt = 0x00;
 
 enum UnlockStates {Init1, Pound, WaitP, One, Wait1, Two, Wait2, Three, Wait3, Four, Wait4, Five, Wait5, Unlock1};
 int UnlockSMTick(int state) {
@@ -53,7 +28,7 @@ int UnlockSMTick(int state) {
 	key = GetKeypadKey();
 	switch(state) {
 		case(Init1):
-			/*if(key == '#') {
+		/*	if(key == '#') {
 				PORTA = 0x0F;
 			} else if (key == '1') {
 				PORTA = 0x01;
@@ -67,8 +42,8 @@ int UnlockSMTick(int state) {
 				PORTA = 0x05;
 			} else if (key == '\0') {
 				PORTA = 0x07;
-			} break;
-		*/	if (key == '#') {
+			} break;*/
+			if (key == '#') {
 				state = Pound;
 			} else {
 				state = Init1;
@@ -142,13 +117,14 @@ int UnlockSMTick(int state) {
 		case(Unlock1):
 			if (key == '\0') {
 				state = Unlock1;
-			} 
-			if ((~PINB & 0x80) == 0x80) {
+			}
+		        if ((~PINB & 0x80) == 0x80) {
 				state = Init1;
 			} break;
 		default:
 			state = Init1;
 			break;
+
 	}
 	switch(state) {
 		case(Init1): PORTB = 0x00; break;
@@ -170,12 +146,15 @@ int UnlockSMTick(int state) {
 
 }
 
-enum LockStates {Init2, Unlock2};
+enum LockStates {Start, Init2, Unlock2};
 int LockSMTick(int state) {
 
 	switch(state) {
+		case(Start):
+			state = Init2;
+			break;
 		case(Init2):
-			if ((~PINB & 0x80) == 0x80) {
+			if ((~PINA & 0x01) == 0x01) {
 				state = Unlock2;
 			} else {
 				state = Init2;
@@ -184,10 +163,11 @@ int LockSMTick(int state) {
 			state = Init2;
 			break;
 		default:
-			state = Init2;
+			state = Start;
 			break;
 	}
 	switch(state) {
+		case(Start): break;
 		case(Init2): break;
 		case(Unlock2):
 			PORTB = 0x00;
@@ -198,92 +178,30 @@ int LockSMTick(int state) {
 
 }
 
-enum SpeakerStates {begin, init3, melody, release};
-int DoorbellSMTick(int state) {
-	switch(state) {
-		case(begin):
-			state = init3;
-			break;
-		case(init3):
-			if ((~PINA & 0xF0) == 0x80) {
-				state = melody;
-			} else {
-				state = init3;
-			} break;
-		case(melody):
-			if (cnt < 15) {
-				state = melody;
-			} else {
-				state = release;
-			} break;
-		case(release):
-			if ((~PINA & 0xF0) == 0x80) {
-				state = init3;
-			} else {
-				state = release;
-			} break;
-		default:
-			state = begin;
-			break;
-	}
-
-	switch(state) {
-		case(begin):
-			break;
-		case(init3):
-			set_PWM(0);
-			cnt = 0;
-			break;
-		case(melody):
-			if (cnt < 5) {
-				set_PWM(261.63);
-			} else if (cnt < 10) {
-				set_PWM(440.00);
-			} else if (cnt < 15) {
-				set_PWM(329.63);
-			} ++cnt;
-				break;
-		case(release):
-			set_PWM(0);
-			cnt = 0x00;
-			break;
-		default:
-			break;
-	}
-	return state;
-}
-
-
 int main() {
 
-	DDRA = 0x00; PORTA = 0xFF; //input
-	DDRB = 0x7F; PORTB = 0xF0; //output
+	DDRA = 0xFF; PORTA = 0x00;
+	DDRB = 0x7F; PORTB = 0x80; //output
 	DDRC = 0xF0; PORTC = 0x0F; //input
 
-	static task task1, task2, task3;
-	task *tasks[] = {&task1, &task2, &task3};
+	static task task1, task2;
+	task *tasks[] = {&task1, &task2};
 	const unsigned short numTasks = sizeof(tasks)/sizeof(task*);
 
 	const char start = -1;
 	//Task1
-	task1.state = start;
+	task1.state = Init1;
 	task1.period = 10;
 	task1.elapsedTime = task1.period;
 	task1.TickFct = &UnlockSMTick;
-	//Task2
+
 	task2.state = start;
 	task2.period = 10;
 	task2.elapsedTime = task2.period;
 	task2.TickFct = &LockSMTick;
-	//Task3
-	task3.state = start;
-	task3.period = 200;
-	task3.elapsedTime = task3.period;
-	task3.TickFct = &DoorbellSMTick;
 
 	TimerSet(10);
 	TimerOn();
-	PWM_on();
 
 	unsigned short i; //scheduler loop iterator
 	while(1) {

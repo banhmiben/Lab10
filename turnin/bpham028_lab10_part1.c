@@ -8,13 +8,6 @@
  *	code, is my own original work.
  */
 
-/*
-Modify the keypad code to be in an SM task and add an LED on PB7 then will light
-up while any button is pressed, consider this immediate feedback to the user. Then,
-modify the keypad SM to utilize the simple task scheduler format. All code from
-here on out should use the task scheduler.
-*/
-
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <timer.h>
@@ -92,7 +85,7 @@ int main() {
 	while(1) {
 		for (i = 0; i < numTasks; i++) {
 			if (tasks[i] -> elapsedTime == tasks[i] -> period) {
-				tasks[i] -> state = tasks[i] -> TickFct(tasks[i] -> state);
+				tasks[i] -> state = tasks[i] -> TickFct(tass[i] -> state);
 				tasks[i] -> elapsedTime = 0;
 			}
 			tasks[i] -> elapsedTime += 50;
